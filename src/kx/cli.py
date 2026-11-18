@@ -6,6 +6,7 @@ import argparse
 import re
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from kx import __version__
 from kx.data.errors import KxError
@@ -41,6 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--fx", default="CLP=X", help="CLP per USD symbol")
     fetch.add_argument("--skip-cpi", action="store_true", help="do not download the CPI index")
     fetch.add_argument("--country", default="CHL", help="World Bank country code for CPI")
+
+    app = commands.add_parser("app", help="open the guided tour in the browser")
+    app.add_argument("--headless", action="store_true", help="do not open a browser")
 
     show = data_commands.add_parser("show", help="print a cached series")
     show.add_argument("--file", required=True, help="path to a cached .csv")
@@ -84,6 +88,32 @@ def _fetch(args: argparse.Namespace) -> int:
     return 0
 
 
+def app_path() -> Path:
+    """Locate the Streamlit entry point, whether installed or run from the repo."""
+    for candidate in (
+        Path(__file__).resolve().parents[2] / "app" / "streamlit_app.py",
+        Path.cwd() / "app" / "streamlit_app.py",
+    ):
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        "app/streamlit_app.py not found; run `kx app` from the project root"
+    )
+
+
+def _app(args: argparse.Namespace) -> int:
+    import subprocess
+
+    command = [sys.executable, "-m", "streamlit", "run", str(app_path())]
+    if args.headless:
+        command += ["--server.headless", "true"]
+    try:
+        return subprocess.call(command)
+    except FileNotFoundError as exc:
+        print("kx: streamlit is not installed; run `uv sync --extra app`", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
 def _show(args: argparse.Namespace) -> int:
     from kx.data.store import load_series
 
@@ -102,6 +132,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command is None:
         parser.print_help()
         return 0
+
+    if args.command == "app":
+        return _app(args)
 
     if args.command == "data":
         if args.data_command is None:

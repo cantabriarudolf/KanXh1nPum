@@ -32,18 +32,47 @@ INE), the thing your money does at a bank is:
 Interest income is taxed, so the real return after tax can be negative. That is the honest
 baseline any strategy has to beat, and the dashboard never hides it.
 
-## Status
-
-Early. The v1 plan and its specs live in [`odd/tasks/v1-guided-tour.md`](odd/tasks/v1-guided-tour.md).
-Reuse decisions and rejected alternatives live in [`docs/decisions.md`](docs/decisions.md).
-
-## Development
+## Quick start
 
 ```bash
-uv sync --extra dev
-uv run pytest
+uv sync --extra dev --extra data --extra app
+uv run kx data fetch --symbol SPY --start 2005-01-01
+uv run kx app
+```
+
+## What the tour shows, with numbers from 2005-2026
+
+Saving CLP 500,000 and then CLP 50,000 a month into the index, with a broker's spread,
+slippage and commission applied:
+
+| | |
+| --- | --- |
+| Money contributed | CLP 13,600,000 |
+| Account today | CLP 120,679,900 |
+| Same money in a 90d-1y deposit at 4.6% | CLP 23,615,896 |
+
+Same period, same deposits, five times apart. That is not a forecast and not a strategy:
+it is the risk premium paid for holding through 2008, 2020 and 2022 without selling. The
+dashboard also shows what happens if you sell at -20%, if you miss the ten best days, and
+how long each drawdown took to recover.
+
+## Status
+
+The tour has two stops live (Chilean reality check, buy & hold). Swing, intraday and
+scalping are next. The v1 plan and its specs live in
+[`odd/tasks/v1-guided-tour.md`](odd/tasks/v1-guided-tour.md); reuse decisions and rejected
+alternatives live in [`docs/decisions.md`](docs/decisions.md).
+
+## Tests
+
+```bash
+uv run pytest        # 65 tests, no network required
 uv run ruff check
 ```
+
+The ledger is mutation-checked: removing sell-side costs, the commission share, or the CPI
+deflator each breaks a test. That is the claim this repo makes as a portfolio piece — the
+engine cannot quietly cheat.
 
 ## Disclaimer
 

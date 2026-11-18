@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kx.cli import build_parser, main, slug
+from kx.cli import app_path, build_parser, main, slug
 
 
 def test_slug_maps_provider_symbols_to_filenames() -> None:
@@ -40,3 +40,17 @@ def test_missing_cache_exits_nonzero_and_says_what_to_run(
     assert code == 1
     assert captured.out == ""
     assert "kx data fetch" in captured.err
+
+
+def test_app_path_points_at_the_real_entry_point() -> None:
+    path = app_path()
+
+    assert path.name == "streamlit_app.py"
+    assert path.exists()
+
+
+def test_app_command_accepts_headless() -> None:
+    args = build_parser().parse_args(["app", "--headless"])
+
+    assert args.command == "app"
+    assert args.headless is True
