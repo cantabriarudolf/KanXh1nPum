@@ -50,7 +50,65 @@ def build_parser() -> argparse.ArgumentParser:
     show.add_argument("--file", required=True, help="path to a cached .csv")
     show.add_argument("--rows", type=int, default=5, help="rows to print from each end")
 
+    bot = commands.add_parser(
+        "bot",
+        help="paper-trade buy & hold on Alpaca's demo account, plan-only unless --send",
+    )
+    bot_commands = bot.add_subparsers(dest="bot_command", metavar="<bot-command>")
+
+    bot_plan = bot_commands.add_parser(
+        "plan", help="print the orders the bot would send (no network, no keys)"
+    )
+    _add_bot_arguments(bot_plan)
+
+    bot_run = bot_commands.add_parser(
+        "run", help="read the paper account and plan; submit only with --send"
+    )
+    _add_bot_arguments(bot_run)
+    bot_run.add_argument(
+        "--send",
+        action="store_true",
+        help="submit the planned orders to the paper account (needs KX_ALPACA_KEY/SECRET)",
+    )
+
     return parser
+
+
+def _add_bot_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--symbol", default="SPY", help="ticker to hold, default SPY")
+    parser.add_argument(
+        "--weight", type=float, default=1.0, help="fraction of account value to hold (0 to 1)"
+    )
+    parser.add_argument(
+        "--strategy",
+        default="hold",
+        choices=("hold", "sma-cross"),
+        help="rule that sets the weight: hold uses --weight, sma-cross reads the cache",
+    )
+    parser.add_argument(
+        "--fast", type=int, default=20, help="sma-cross short window in bars, default 20"
+    )
+    parser.add_argument(
+        "--slow", type=int, default=100, help="sma-cross long window in bars, default 100"
+    )
+    parser.add_argument(
+        "--cost-preset", default="alpaca", help="cost model: alpaca or chile (docs/bot.md)"
+    )
+    parser.add_argument(
+        "--initial-cash", type=float, default=1_000_000.0, help="CLP to plan with"
+    )
+    parser.add_argument(
+        "--contribution", type=float, default=50_000.0, help="monthly CLP you add yourself"
+    )
+    parser.add_argument(
+        "--whole-shares", action="store_true", help="buy whole shares instead of fractions"
+    )
+    parser.add_argument("--data-dir", default=None, help="cache directory, default data/cache")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="refused on purpose: this project never trades real money",
+    )
 
 
 def _describe(path, series) -> str:
@@ -125,6 +183,74 @@ def _show(args: argparse.Namespace) -> int:
     return 0
 
 
+def _bot_config(args: argparse.Namespace):
+    from kx.bot import BotConfig
+
+    return BotConfig(
+        initial_cash_clp=args.initial_cash,
+        contribution_clp=args.contribution,
+        symbol=args.symbol,
+        cost_preset=args.cost_preset,
+        fractional=not args.whole_shares,
+        strategy=args.strategy,
+        fast=args.fast,
+        slow=args.slow,
+    )
+
+
+def _bot_market(args: argparse.Namespace):
+    """The cached frame: the bot decides on what is already on disk, never on a live quote."""
+    from kx.loader import load_market
+
+    return load_market(args.data_dir, symbol=args.symbol).frame
+
+
+def _bot_weight(config, frame, args: argparse.Namespace) -> float:
+    from kx.bot import strategy_weight
+
+    return strategy_weight(config, frame, args.weight)
+
+
+def _bot_plan(args: argparse.Namespace) -> int:
+    from kx.bot import DryRunBroker, describe, plan
+
+    config = _bot_config(args)
+    frame = _bot_market(args)
+    weight = _bot_weight(config, frame, args)
+    broker = DryRunBroker(equity_clp=config.initial_cash_clp)
+    print(describe(plan(config, frame.iloc[-1], weight, broker)))
+    return 0
+
+
+def _bot_run(args: argparse.Namespace) -> int:
+    from kx.bot import describe, paper_broker, run
+
+    config = _bot_config(args)
+    # Ask for credentials first: it is the refusal a beginner needs to see, and it keeps
+    # the plan honest — it is computed against the real paper account, not a guess.
+    broker = paper_broker()
+    frame = _bot_market(args)
+    weight = _bot_weight(config, frame, args)
+    result = run(config, frame.iloc[-1], weight, broker, send=args.send)
+    print(describe(result))
+    return 0
+
+
+def _bot(args: argparse.Namespace) -> int:
+    from kx.bot import LIVE_REFUSED
+
+    # Refuse live trading before any credential, cache or network work happens.
+    if args.live:
+        print(f"kx: {LIVE_REFUSED}", file=sys.stderr)
+        return 1
+
+    try:
+        return _bot_run(args) if args.bot_command == "run" else _bot_plan(args)
+    except KxError as exc:
+        print(f"kx: {exc}", file=sys.stderr)
+        return 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -135,6 +261,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "app":
         return _app(args)
+
+    if args.command == "bot":
+        if args.bot_command is None:
+            parser.parse_args(["bot", "--help"])
+            return 0
+        return _bot(args)
 
     if args.command == "data":
         if args.data_command is None:
