@@ -87,13 +87,17 @@ parser and exits `2`. Scripts can rely on the first two.
 
 It will:
 
-* read the paper account's equity and current position;
+* read the paper account's equity and current position — from the account's position
+  list, never by reading an error as "flat";
 * size one market order toward the target weight, using the ledger's commission and
   spread arithmetic — the same numbers the dashboard charges;
 * take that target weight either from `--weight` or from the crossover rule
   (`--strategy sma-cross`), so the second stop is not dashboard-only;
+* stamp every order with a deterministic `client_order_id` derived from the decision
+  (symbol, side, quantity, bar date, target weight, cost preset), so the same plan always
+  produces the same id;
 * print the order with the price on the chart (`ref`) and the price the ledger assumes
-  you get (`exec`), plus the commission and the CLP notional;
+  you get (`exec`), plus the commission, the CLP notional and that id;
 * with `--send`, submit that order to the paper host only.
 
 It will not:
@@ -111,7 +115,23 @@ It will not:
 * model Chilean tax or inflation on the order. Both are in the dashboard comparison, not
   in the order path.
 
-## 5. Costs
+## 5. When a submit fails
+
+If `submit` raises, the order may still have been accepted: the response can be lost
+after the host took it. The bot says so instead of pretending nothing happened, and names
+the `client_order_id`:
+
+```
+kx: the order may or may not have reached the paper account: ... Look for client order id
+kx-8efd17eb7666e7e2c75eedd2 in the paper account before retrying: the same plan reuses
+that id, so a duplicate is refused instead of doubling the position.
+```
+
+Look that id up in the paper account before doing anything else. Rerunning the same plan
+is safe: Alpaca refuses a `client_order_id` it has already seen, so a retry cannot double
+the position. What the id does not do is reconcile for you — you still have to look.
+
+## 6. Costs
 
 Two presets, shared with the dashboard so a plan and a simulation agree. Both read from
 `PRESETS_BY_KEY` in `src/kx/presets.py`; the dashboard's labels live beside it in
@@ -126,7 +146,7 @@ They are estimates, not a quote. Edit `src/kx/presets.py` to match your own brok
 re-read the plan: the difference between `ref` and `exec` on the printout is the friction
 you are paying for the round trip.
 
-## 6. Why a paper account proves plumbing, not edge
+## 7. Why a paper account proves plumbing, not edge
 
 A paper account proves the plumbing — keys, order types, fills, position accounting — and
 proves nothing about edge: paper fills are simulated against live quotes but never move
@@ -134,7 +154,7 @@ the book, so they systematically understate the friction you would actually pay.
 decision has no edge to test, only a horizon, and two averages crossing is a rule with a
 cost, not an edge.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Message | Fix |
 | --- | --- |
@@ -142,6 +162,7 @@ cost, not an edge.
 | `alpaca-py is not installed` | `uv sync --extra bot` |
 | `no cached series at ...` | `uv run kx data fetch --symbol SPY` |
 | `the cached series has N bars but the rule needs at least 100` | Fetch more history: `kx data fetch --start 2005-01-01`, or lower `--slow`. |
+| `the order may or may not have reached the paper account` | Check the paper account for that `client_order_id` before retrying (section 5). |
 | `live trading is refused` | Drop `--live`. This project has no live path. |
 
 Nothing here is investment advice: it is a cost model with an order button that only

@@ -85,32 +85,24 @@ def write_cache(directory: Path) -> Path:
 
 
 class FakePositionClient:
-    """An account client that answers one position call, or raises what it was given."""
+    """An account client that answers one position list, or raises what it was given."""
 
-    def __init__(self, position: object = None, raises: BaseException | None = None) -> None:
-        self._position = position
+    def __init__(self, positions: object = (), raises: BaseException | None = None) -> None:
+        self._positions = positions
         self._raises = raises
 
-    def get_open_position(self, symbol: str) -> object:
+    def get_all_positions(self) -> object:
         if self._raises is not None:
             raise self._raises
-        return self._position
+        return self._positions
 
 
-def fake_alpaca_errors(monkeypatch: pytest.MonkeyPatch) -> type[Exception]:
-    """Stand in for alpaca.common.exceptions so APIError is testable without the extra."""
+class FakePosition:
+    """Just the two fields the broker reads off an Alpaca position."""
 
-    class APIError(Exception):
-        def __init__(self, message: str, status_code: int | None = None) -> None:
-            super().__init__(message)
-            self.status_code = status_code
-
-    module = types.ModuleType("alpaca.common.exceptions")
-    module.APIError = APIError  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "alpaca", types.ModuleType("alpaca"))
-    monkeypatch.setitem(sys.modules, "alpaca.common", types.ModuleType("alpaca.common"))
-    monkeypatch.setitem(sys.modules, "alpaca.common.exceptions", module)
-    return APIError
+    def __init__(self, symbol: str, qty: float) -> None:
+        self.symbol = symbol
+        self.qty = qty
 
 
 def test_plan_returns_the_intent_and_sends_nothing() -> None:
@@ -256,6 +248,7 @@ def test_dry_run_broker_refuses_to_submit() -> None:
         exec_price_usd=100.05,
         notional_clp=100_050.0,
         commission_clp=0.0,
+        client_order_id="kx-test",
     )
 
     with pytest.raises(BotError, match="dry run"):
@@ -424,24 +417,113 @@ def test_cli_reports_a_rule_error_instead_of_dying_with_a_traceback(
     assert captured.out == ""
 
 
-def test_position_qty_reads_a_missing_position_as_flat(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    error = fake_alpaca_errors(monkeypatch)
-    broker = AlpacaPaperBroker(FakePositionClient(raises=error("position does not exist", 404)))
+def test_position_qty_reads_a_missing_position_as_flat() -> None:
+    broker = AlpacaPaperBroker(FakePositionClient(positions=[FakePosition("QQQ", 3.0)]))
 
     assert broker.position_qty("SPY") == 0.0
 
 
-def test_position_qty_never_masks_a_real_api_failure(
+def test_position_qty_finds_the_symbol_among_others() -> None:
+    broker = AlpacaPaperBroker(
+        FakePositionClient(positions=[FakePosition("QQQ", 3.0), FakePosition("SPY", 7.5)])
+    )
+
+    assert broker.position_qty("SPY") == 7.5
+
+
+def test_position_qty_never_masks_a_real_api_failure() -> None:
+    """A rate limit read as flat would size a full order against a position never read."""
+    broker = AlpacaPaperBroker(FakePositionClient(raises=RuntimeError("rate limit exceeded")))
+
+    with pytest.raises(RuntimeError, match="rate limit exceeded"):
+        broker.position_qty("SPY")
+
+
+def test_the_same_plan_reuses_the_same_client_order_id() -> None:
+    """A retry has to carry the same id, or the host cannot refuse the duplicate."""
+    first = plan(BotConfig(), make_frame().iloc[-1], 1.0, FakeBroker())
+    second = plan(BotConfig(), make_frame().iloc[-1], 1.0, FakeBroker())
+
+    order_id = first.intents[0].client_order_id
+    assert order_id == second.intents[0].client_order_id
+    assert order_id.startswith("kx-")
+    # Alpaca rejects client order ids longer than 48 characters.
+    assert len(order_id) <= 48
+
+
+def test_a_different_decision_gets_a_different_client_order_id() -> None:
+    half = plan(BotConfig(), make_frame().iloc[-1], 0.5, FakeBroker())
+    full = plan(BotConfig(), make_frame().iloc[-1], 1.0, FakeBroker())
+
+    assert half.intents[0].client_order_id != full.intents[0].client_order_id
+
+
+def test_alpaca_submit_forwards_the_client_order_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A rate limit read as flat would size a full order against a position never read."""
-    error = fake_alpaca_errors(monkeypatch)
-    broker = AlpacaPaperBroker(FakePositionClient(raises=error("rate limit exceeded", 429)))
+    captured: dict[str, object] = {}
 
-    with pytest.raises(error, match="rate limit exceeded"):
-        broker.position_qty("SPY")
+    class FakeRequest:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    requests_module = types.ModuleType("alpaca.trading.requests")
+    requests_module.MarketOrderRequest = FakeRequest  # type: ignore[attr-defined]
+    enums_module = types.ModuleType("alpaca.trading.enums")
+    enums_module.OrderSide = types.SimpleNamespace(BUY="buy", SELL="sell")  # type: ignore[attr-defined]
+    enums_module.TimeInForce = types.SimpleNamespace(DAY="day")  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "alpaca", types.ModuleType("alpaca"))
+    monkeypatch.setitem(sys.modules, "alpaca.trading", types.ModuleType("alpaca.trading"))
+    monkeypatch.setitem(sys.modules, "alpaca.trading.requests", requests_module)
+    monkeypatch.setitem(sys.modules, "alpaca.trading.enums", enums_module)
+
+    class FakeClient:
+        def submit_order(self, request: object) -> object:
+            return types.SimpleNamespace(id="order-1")
+
+    order = OrderIntent(
+        symbol="SPY",
+        side="buy",
+        qty=2.0,
+        ref_price_usd=100.0,
+        exec_price_usd=100.05,
+        notional_clp=200_100.0,
+        commission_clp=0.0,
+        client_order_id="kx-abc",
+    )
+
+    assert AlpacaPaperBroker(FakeClient()).submit(order) == "order-1"
+    assert captured["client_order_id"] == "kx-abc"
+
+
+def test_a_failed_submit_names_the_client_order_id_for_reconciliation() -> None:
+    """A lost response must not read as "nothing was sent"."""
+    expected = plan(BotConfig(), make_frame().iloc[-1], 1.0, FakeBroker()).intents[0]
+
+    class Refusing(FakeBroker):
+        def submit(self, order: OrderIntent) -> str:
+            raise RuntimeError("connection reset by peer")
+
+    with pytest.raises(BotError) as caught:
+        run(BotConfig(), make_frame().iloc[-1], 1.0, Refusing(), send=True)
+
+    message = str(caught.value)
+    assert expected.client_order_id in message
+    assert "may or may not have reached" in message
+    assert "connection reset by peer" in message
+
+
+def test_cli_data_reports_a_bad_symbol_instead_of_dying_with_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("KX_DATA_DIR", str(tmp_path))
+
+    code = main(["data", "fetch", "--symbol", "===", "--skip-cpi"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.err.startswith("kx: ")
+    assert "no usable characters" in captured.err
 
 
 def test_paper_broker_is_built_with_paper_true(

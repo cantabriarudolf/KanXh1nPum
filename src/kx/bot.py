@@ -17,10 +17,15 @@ The refusals are the point of the module:
 
 Alpaca's SDK is imported inside :func:`paper_broker`, so ``import kx.bot`` works without
 the ``bot`` extra installed and without touching the network.
+
+One more thing is deliberate rather than defensive: every order carries a
+``client_order_id`` derived from the decision itself. Alpaca refuses an id it has already
+seen, so a retry after a lost response fails loudly instead of doubling the position.
 """
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 from collections.abc import Mapping
@@ -31,7 +36,7 @@ import pandas as pd
 
 from kx.data import FX, PRICE
 from kx.data.errors import KxError
-from kx.ledger import Costs, _rebalance
+from kx.ledger import Costs, Trade, _rebalance
 from kx.presets import PRESETS_BY_KEY
 from kx.strategies import sma_crossover
 
@@ -48,22 +53,6 @@ LIVE_REFUSED = (
 
 _PAPER_ONLY = "paper only: nothing was sent"
 _NO_ORDER = "no order: the target is already met or the difference is below the minimum"
-
-#: Alpaca answers this when the account does not hold the symbol at all.
-_FLAT_STATUS = 404
-
-
-def _is_flat(exc: object) -> bool:
-    """True only for the "you hold nothing" answer, never for a real API failure.
-
-    Reading every APIError as flat made a rate limit or an auth rejection
-    indistinguishable from holding no position: the plan then sized a full order
-    against a position it never read, and `run --send` submitted it on top of the
-    existing one. Only the not-found answer is flat; everything else propagates.
-    """
-    if getattr(exc, "status_code", None) == _FLAT_STATUS:
-        return True
-    return "position does not exist" in str(exc).lower()
 
 # Estimates, not quotes. They come from kx.presets, which the dashboard also imports, so
 # a plan printed here costs the same as the same plan simulated there.
@@ -129,6 +118,7 @@ class OrderIntent:
     exec_price_usd: float
     notional_clp: float
     commission_clp: float
+    client_order_id: str
 
 
 @dataclass(frozen=True)
@@ -200,15 +190,14 @@ class AlpacaPaperBroker:
         return float(account.equity) * fx
 
     def position_qty(self, symbol: str) -> float:
-        from alpaca.common.exceptions import APIError
-
-        try:
-            position = self._client.get_open_position(symbol)
-        except APIError as exc:
-            if _is_flat(exc):
-                return 0.0
-            raise
-        return float(position.qty)
+        # Ask for the whole list rather than inferring "flat" from an exception. The
+        # account states what it holds, so any API failure propagates instead of being
+        # read as a fact about the position — the bug that made a rate limit look flat
+        # and sized a full order on top of a position nobody had read.
+        for position in self._client.get_all_positions():
+            if str(position.symbol).upper() == symbol.upper():
+                return float(position.qty)
+        return 0.0
 
     def submit(self, order: OrderIntent) -> str:
         from alpaca.trading.enums import OrderSide, TimeInForce
@@ -219,6 +208,7 @@ class AlpacaPaperBroker:
             qty=order.qty,
             side=OrderSide.BUY if order.side == "buy" else OrderSide.SELL,
             time_in_force=TimeInForce.DAY,
+            client_order_id=order.client_order_id,
         )
         return str(self._client.submit_order(request).id)
 
@@ -297,6 +287,22 @@ def _rule_label(config: BotConfig) -> str:
     return f"sma-cross {config.fast}/{config.slow}"
 
 
+def _client_order_id(
+    config: BotConfig, as_of: pd.Timestamp, target_weight: float, trade: Trade
+) -> str:
+    """A deterministic id for this exact decision, so a retry cannot double the order.
+
+    The payload is the decision, not the clock: the same plan on the same bar reuses the
+    same id, and Alpaca refuses an id it has already accepted. That is what turns a lost
+    response into a loud error instead of a second position.
+    """
+    payload = (
+        f"{config.symbol}|{trade.side}|{trade.qty:.8f}|{as_of:%Y-%m-%d}|"
+        f"{target_weight:.6f}|{config.cost_preset}"
+    )
+    return "kx-" + hashlib.sha256(payload.encode()).hexdigest()[:24]
+
+
 def _as_of(market_row: pd.Series) -> pd.Timestamp:
     label = market_row.name
     if label is None:
@@ -363,6 +369,7 @@ def plan(
                 exec_price_usd=trade.exec_price_usd,
                 notional_clp=trade.qty * trade.exec_price_usd * fx,
                 commission_clp=trade.commission_clp,
+                client_order_id=_client_order_id(config, as_of, target_weight, trade),
             ),
         )
         reason = (
@@ -400,9 +407,22 @@ def run(
     planned = plan(config, market_row, target_weight, broker, live=live)
     if not send:
         return planned
-    order_ids = tuple(broker.submit(intent) for intent in planned.intents)
+    order_ids: list[str] = []
+    for intent in planned.intents:
+        try:
+            order_ids.append(broker.submit(intent))
+        except Exception as exc:
+            # The response may have been lost after the host accepted the order, so this
+            # is the one place where "nothing happened" is not a safe assumption.
+            raise BotError(
+                f"the order may or may not have reached the paper account: {exc}. Nothing "
+                f"else was submitted. Look for client order id {intent.client_order_id} in "
+                f"the paper account before retrying: the same plan reuses that id, so a "
+                f"duplicate is refused instead of doubling the position."
+            ) from exc
+    submitted = tuple(order_ids)
     # `sent` answers "did an order reach the account", not "was send requested".
-    return replace(planned, sent=bool(order_ids), order_ids=order_ids)
+    return replace(planned, sent=bool(submitted), order_ids=submitted)
 
 
 def describe(result: Plan) -> str:
@@ -421,6 +441,7 @@ def describe(result: Plan) -> str:
             f"  {intent.side.upper()} {intent.qty:.4f} {intent.symbol}  "
             f"ref {intent.ref_price_usd:.2f} USD  exec {intent.exec_price_usd:.2f} USD  "
             f"notional {intent.notional_clp:.0f} CLP  commission {intent.commission_clp:.0f} CLP"
+            f"  id {intent.client_order_id}"
         )
     if not result.intents:
         lines.append(f"  {result.reason}")

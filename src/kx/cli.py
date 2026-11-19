@@ -125,15 +125,17 @@ def _fetch(args: argparse.Namespace) -> int:
     written: list[str] = []
 
     for symbol in args.symbol:
-        series = fetch_prices(symbol, start=args.start, end=args.end)
+        # Name the file before touching the network: a symbol with no usable characters
+        # is a typo to report, not a request to send to a provider.
         path = out / f"{slug(symbol)}.csv"
+        series = fetch_prices(symbol, start=args.start, end=args.end)
         write_series(series, path)
         written.append(_describe(path, series))
 
+    fx_path = out / f"{slug(args.fx)}.csv"
     fx = fetch_fx(args.start, end=args.end, pair=args.fx)
-    path = out / f"{slug(args.fx)}.csv"
-    write_series(fx, path)
-    written.append(_describe(path, fx))
+    write_series(fx, fx_path)
+    written.append(_describe(fx_path, fx))
 
     if not args.skip_cpi:
         cpi = fetch_cpi(args.country)
@@ -278,7 +280,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         handler = _fetch if args.data_command == "fetch" else _show
         try:
             return handler(args)
-        except KxError as exc:
+        except (KxError, ValueError) as exc:
+            # Same contract as the bot branch: a bad argument is a message, not a
+            # traceback (docs/bot.md states it, and `kx data fetch` follows it too).
             print(f"kx: {exc}", file=sys.stderr)
             return 1
 
