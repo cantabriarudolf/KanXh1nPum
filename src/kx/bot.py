@@ -140,10 +140,18 @@ class Plan:
 
 
 class Broker(Protocol):
-    """The only three things the bot asks an account."""
+    """The four things the bot asks an account."""
 
     def account_value_clp(self, fx: float) -> float:
         """Total account value in CLP, converted at `fx` (CLP per USD)."""
+
+    def available_cash_clp(self, fx: float) -> float:
+        """Settled cash in CLP, asked rather than derived.
+
+        Deriving it as ``equity - position * price`` assumes the account holds nothing
+        but the target symbol: any other holding inflates the answer and the order comes
+        out larger than the cash behind it.
+        """
 
     def position_qty(self, symbol: str) -> float:
         """Shares held right now; 0.0 when flat."""
@@ -161,9 +169,13 @@ class DryRunBroker:
 
     equity_clp: float = 0.0
     qty: float = 0.0
+    cash_clp: float = 0.0
 
     def account_value_clp(self, fx: float) -> float:
         return self.equity_clp
+
+    def available_cash_clp(self, fx: float) -> float:
+        return self.cash_clp
 
     def position_qty(self, symbol: str) -> float:
         return self.qty
@@ -188,6 +200,10 @@ class AlpacaPaperBroker:
     def account_value_clp(self, fx: float) -> float:
         account = self._client.get_account()
         return float(account.equity) * fx
+
+    def available_cash_clp(self, fx: float) -> float:
+        account = self._client.get_account()
+        return float(account.cash) * fx
 
     def position_qty(self, symbol: str) -> float:
         # Ask for the whole list rather than inferring "flat" from an exception. The
@@ -344,7 +360,7 @@ def plan(
 
     equity_clp = float(broker.account_value_clp(fx))
     current_qty = float(broker.position_qty(config.symbol))
-    cash_clp = equity_clp - current_qty * price_usd * fx
+    cash_clp = float(broker.available_cash_clp(fx))
 
     _cash_after, target_qty, _friction, trade = _rebalance(
         cash_clp=cash_clp,

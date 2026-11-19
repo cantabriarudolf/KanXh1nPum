@@ -31,6 +31,7 @@
 | T8 | S1 | Cableado Alpaca paper para la estrategia de buy & hold, runner en modo seguro por defecto | inline | 4e5dd21 |
 | T9 | S7 | Parada 2 (swing) para probar que el motor generaliza sin reescribir la capa de costos | inline | 07b341f |
 | T10 | S1 | Idempotencia de `--send` (`client_order_id` determinístico), `position_qty` sin inferir "plano" desde una excepción, y `kx data fetch` cumpliendo el contrato `kx: <reason>` | inline | a515f73 |
+| T11 | S1 | Efectivo leído de la cuenta (`available_cash_clp`) en vez de deducirlo de `equity − posición × precio` | inline | pending |
 
 ## Log
 
@@ -78,3 +79,5 @@ Límite explícito del fix de idempotencia: **evita duplicar, no reconcilia**. S
 **L9** (forma de entrega, 2026-11-19): un solo PR (#1, `feat/v1-guided-tour` → `main`), 12 commits, ~4472 líneas. Los límites de rebanada quedan donde los puso el review: `e5dee81..8e0b4a8` (lineage `review-c913f3cf803130dd`) y `f182aa0..6228651` (lineage `review-d0f08b37f377665e`). `a515f73` cae fuera de ambos rangos y es trabajo de follow-up, no una reapertura: los hallazgos que lo motivaron eran informativos.
 
 Siguen abiertos, sin motivo para re-correr review sobre este candidato: `R2-app-dpf-convention-split` (la métrica DPF mezcla dos convenciones de capitalización en un número), `R2-duplicate-years-helper` (`_years` triplicado mientras los docstrings prometen "stated once"), `R4-app-unhandled-alignment` (un `DataAlignmentError` llega crudo a la app), `R4-fetch-partial-cache` y `R4-store-nonatomic-write` (caché escrita sin temp+rename), `R1-country-filename` (el nombre del CPI no pasa por `slug`), `R2-unused-scenario-labels`, `R3-003` (test acoplado al conteo exacto de operaciones).
+
+**L10** (bugfix, 2026-11-19): la review de entrega (`review-c62b5c1d45cca734`) encontró un bug de dinero real en `plan()`: el efectivo se deducía como `equity − posición × precio`, lo que asume que la cuenta no tiene nada más que el símbolo objetivo. Con cualquier otro ticker en la cuenta el efectivo queda inflado y la orden sale más grande que la plata que la respalda. Arreglado en T11: el protocolo `Broker` gana `available_cash_clp(fx)` y `plan()` lo pregunta en vez de deducirlo (`AlpacaPaperBroker` lee `account.cash`; `DryRunBroker` recibe el campo). Un dato del camino: `equity` sigue leyéndose aparte para mostrarla, así que un plan hace dos lecturas de la cuenta — se prefiere el número honesto a una llamada menos.

@@ -219,7 +219,9 @@ def _bot_plan(args: argparse.Namespace) -> int:
     config = _bot_config(args)
     frame = _bot_market(args)
     weight = _bot_weight(config, frame, args)
-    broker = DryRunBroker(equity_clp=config.initial_cash_clp)
+    broker = DryRunBroker(
+        equity_clp=config.initial_cash_clp, cash_clp=config.initial_cash_clp
+    )
     print(describe(plan(config, frame.iloc[-1], weight, broker)))
     return 0
 

@@ -64,10 +64,14 @@ class FakeBroker:
 
     equity_clp: float = 1_000_000.0
     qty: float = 0.0
+    cash_clp: float = 1_000_000.0
     sent: list[OrderIntent] = field(default_factory=list)
 
     def account_value_clp(self, fx: float) -> float:
         return self.equity_clp
+
+    def available_cash_clp(self, fx: float) -> float:
+        return self.cash_clp
 
     def position_qty(self, symbol: str) -> float:
         return self.qty
@@ -415,6 +419,34 @@ def test_cli_reports_a_rule_error_instead_of_dying_with_a_traceback(
     assert captured.err.startswith("kx: ")
     assert "at least 1" in captured.err
     assert captured.out == ""
+
+
+def test_cash_is_asked_of_the_account_not_derived_from_equity() -> None:
+    """An account holding another ticker must not have its cash overstated."""
+    broker = FakeBroker(equity_clp=1_000_000.0, cash_clp=200_000.0, qty=0.0)
+
+    intended = plan(BotConfig(), make_frame().iloc[-1], 1.0, broker).intents[0]
+
+    # Only the 200,000 CLP of cash can be spent, not the whole account value.
+    assert intended.notional_clp <= 200_000.0
+    assert intended.qty < 200_000.0 / 1000.0 / 100.0
+
+
+def test_dry_run_broker_reports_the_cash_it_was_given() -> None:
+    broker = DryRunBroker(equity_clp=500.0, cash_clp=300.0)
+
+    assert broker.available_cash_clp(1000.0) == 300.0
+
+
+def test_alpaca_cash_is_read_from_the_account() -> None:
+    class FakeAccountClient:
+        def get_account(self) -> object:
+            return types.SimpleNamespace(equity="1000.00", cash="250.00")
+
+    broker = AlpacaPaperBroker(FakeAccountClient())
+
+    assert broker.available_cash_clp(1000.0) == 250_000.0
+    assert broker.account_value_clp(1000.0) == 1_000_000.0
 
 
 def test_position_qty_reads_a_missing_position_as_flat() -> None:

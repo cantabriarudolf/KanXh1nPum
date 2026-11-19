@@ -87,8 +87,9 @@ parser and exits `2`. Scripts can rely on the first two.
 
 It will:
 
-* read the paper account's equity and current position — from the account's position
-  list, never by reading an error as "flat";
+* read the paper account's equity, its settled cash and its current position — cash is
+  asked of the account, never derived from total value, and the position comes from the
+  account's list rather than from reading an error as "flat";
 * size one market order toward the target weight, using the ledger's commission and
   spread arithmetic — the same numbers the dashboard charges;
 * take that target weight either from `--weight` or from the crossover rule
@@ -106,7 +107,9 @@ It will not:
   that message. There is no code path to the live host.
 * submit anything by default. `send` defaults to `False` in the library and in the CLI.
 * move money for you. `--contribution` is informational: funding the account is a
-  transfer you make yourself, and the bot invests whatever the account already holds.
+  transfer you make yourself, and the bot spends the account's settled cash — not a
+  number derived from its total value, which would overstate the budget whenever the
+  account holds something other than the target symbol.
 * sell down to a target. The ledger's rebalance buys toward the target and liquidates
   completely at weight `0`; it does not trim an overweight position. That is the
   buy & hold rule, not an omission.
