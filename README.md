@@ -40,6 +40,23 @@ uv run kx data fetch --symbol SPY --start 2005-01-01
 uv run kx app
 ```
 
+## The demo account
+
+The dashboard simulates. The bot trades a real Alpaca **paper** account, so the order and
+the chart are charged by the same cost model:
+
+```bash
+uv sync --extra bot
+uv run kx bot plan       # what it would do: no network, no keys
+uv run kx bot run        # reads the paper account, sends nothing
+uv run kx bot run --send # sends the order to the demo account
+```
+
+`--strategy sma-cross` runs the second stop's rule against the same account. There is no
+live path: `--live` is refused on purpose. Keys live in your shell
+(`KX_ALPACA_KEY`, `KX_ALPACA_SECRET`), never in the dashboard. [`docs/bot.md`](docs/bot.md)
+is the runbook.
+
 ## What the tour shows, with numbers from 2005-2026
 
 Saving CLP 500,000 and then CLP 50,000 a month into the index, with a broker's spread,
@@ -58,15 +75,16 @@ how long each drawdown took to recover.
 
 ## Status
 
-The tour has two stops live (Chilean reality check, buy & hold). Swing, intraday and
-scalping are next. The v1 plan and its specs live in
-[`odd/tasks/v1-guided-tour.md`](odd/tasks/v1-guided-tour.md); reuse decisions and rejected
-alternatives live in [`docs/decisions.md`](docs/decisions.md).
+The tour has three stops live: the Chilean reality check, buy & hold, and crossing
+averages. Both trading stops run through the same cost ledger, which is the point — change
+the rule, keep the arithmetic. Intraday and scalping are next. The v1 plan and its specs
+live in [`odd/tasks/v1-guided-tour.md`](odd/tasks/v1-guided-tour.md); reuse decisions and
+rejected alternatives live in [`docs/decisions.md`](docs/decisions.md).
 
 ## Tests
 
 ```bash
-uv run pytest        # 65 tests, no network required
+uv run pytest        # 119 tests, no network required
 uv run ruff check
 ```
 
