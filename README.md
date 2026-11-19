@@ -1,4 +1,8 @@
-# KanXh1nPum
+<p align="center">
+  <img src="assets/band.svg" alt="" width="100%">
+</p>
+
+<h1 align="center">KanXh1nPum</h1>
 
 A cost-aware simulation lab and a guided tour through trading timeframes, built for someone
 who has never invested and lives in Chile.
@@ -105,3 +109,9 @@ money, do not put it at risk.
 ## License
 
 MIT.
+
+---
+
+<p align="center">
+  <sub><strong>motor · Gentle Shell</strong> · MIT</sub>
+</p>
