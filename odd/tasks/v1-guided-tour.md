@@ -33,7 +33,7 @@
 | T10 | S1 | Idempotencia de `--send` (`client_order_id` determinístico), `position_qty` sin inferir "plano" desde una excepción, y `kx data fetch` cumpliendo el contrato `kx: <reason>` | inline | a515f73 |
 | T11 | S1 | Efectivo leído de la cuenta (`available_cash_clp`) en vez de deducirlo de `equity − posición × precio` | inline | 9e09916 |
 | T12 | S2, S3, S9 | Caché escrita de forma atómica (temp + `os.replace`) y `DataAlignmentError` explicado en la app en vez de traceback crudo | inline | 113132d |
-| T13 | S7 | Parada 3 del recorrido: el costo de la frecuencia, con la misma regla y ventanas distintas | inline | pending |
+| T13 | S7 | Parada 3 del recorrido: el costo de la frecuencia, con la misma regla y ventanas distintas | inline | 4509dc7 |
 
 ## Log
 
