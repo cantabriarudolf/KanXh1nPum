@@ -84,6 +84,35 @@ def write_cache(directory: Path) -> Path:
     return directory
 
 
+class FakePositionClient:
+    """An account client that answers one position call, or raises what it was given."""
+
+    def __init__(self, position: object = None, raises: BaseException | None = None) -> None:
+        self._position = position
+        self._raises = raises
+
+    def get_open_position(self, symbol: str) -> object:
+        if self._raises is not None:
+            raise self._raises
+        return self._position
+
+
+def fake_alpaca_errors(monkeypatch: pytest.MonkeyPatch) -> type[Exception]:
+    """Stand in for alpaca.common.exceptions so APIError is testable without the extra."""
+
+    class APIError(Exception):
+        def __init__(self, message: str, status_code: int | None = None) -> None:
+            super().__init__(message)
+            self.status_code = status_code
+
+    module = types.ModuleType("alpaca.common.exceptions")
+    module.APIError = APIError  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "alpaca", types.ModuleType("alpaca"))
+    monkeypatch.setitem(sys.modules, "alpaca.common", types.ModuleType("alpaca.common"))
+    monkeypatch.setitem(sys.modules, "alpaca.common.exceptions", module)
+    return APIError
+
+
 def test_plan_returns_the_intent_and_sends_nothing() -> None:
     frame = make_frame()
     broker = FakeBroker()
@@ -378,6 +407,26 @@ def test_describe_names_the_rule_that_set_the_weight() -> None:
 
     assert "sma-cross" not in describe(held)
     assert "sma-cross 2/3" in describe(crossed)
+
+
+def test_position_qty_reads_a_missing_position_as_flat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    error = fake_alpaca_errors(monkeypatch)
+    broker = AlpacaPaperBroker(FakePositionClient(raises=error("position does not exist", 404)))
+
+    assert broker.position_qty("SPY") == 0.0
+
+
+def test_position_qty_never_masks_a_real_api_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rate limit read as flat would size a full order against a position never read."""
+    error = fake_alpaca_errors(monkeypatch)
+    broker = AlpacaPaperBroker(FakePositionClient(raises=error("rate limit exceeded", 429)))
+
+    with pytest.raises(error, match="rate limit exceeded"):
+        broker.position_qty("SPY")
 
 
 def test_paper_broker_is_built_with_paper_true(

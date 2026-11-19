@@ -49,6 +49,22 @@ LIVE_REFUSED = (
 _PAPER_ONLY = "paper only: nothing was sent"
 _NO_ORDER = "no order: the target is already met or the difference is below the minimum"
 
+#: Alpaca answers this when the account does not hold the symbol at all.
+_FLAT_STATUS = 404
+
+
+def _is_flat(exc: object) -> bool:
+    """True only for the "you hold nothing" answer, never for a real API failure.
+
+    Reading every APIError as flat made a rate limit or an auth rejection
+    indistinguishable from holding no position: the plan then sized a full order
+    against a position it never read, and `run --send` submitted it on top of the
+    existing one. Only the not-found answer is flat; everything else propagates.
+    """
+    if getattr(exc, "status_code", None) == _FLAT_STATUS:
+        return True
+    return "position does not exist" in str(exc).lower()
+
 # Estimates, not quotes. They come from kx.presets, which the dashboard also imports, so
 # a plan printed here costs the same as the same plan simulated there.
 COST_PRESETS = PRESETS_BY_KEY
@@ -188,8 +204,10 @@ class AlpacaPaperBroker:
 
         try:
             position = self._client.get_open_position(symbol)
-        except APIError:
-            return 0.0
+        except APIError as exc:
+            if _is_flat(exc):
+                return 0.0
+            raise
         return float(position.qty)
 
     def submit(self, order: OrderIntent) -> str:
