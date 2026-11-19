@@ -192,6 +192,26 @@ def test_tour_names_the_demo_account_and_how_to_reach_it(
     assert not at.text_input
 
 
+def test_app_explains_a_misaligned_cache_instead_of_crashing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An FX series that starts after the prices must not reach the beginner raw."""
+    prices = pd.bdate_range("2024-01-02", periods=10)
+    late_fx = pd.bdate_range("2024-01-08", periods=5)
+    write_series(pd.Series(100.0, index=prices, dtype="float64"), tmp_path / "SPY.csv")
+    write_series(pd.Series(900.0, index=late_fx, dtype="float64"), tmp_path / "CLP_X.csv")
+    write_series(
+        pd.Series(np.linspace(100.0, 101.0, len(prices)), index=prices, dtype="float64"),
+        tmp_path / "CPI_CHL.csv",
+    )
+    monkeypatch.setenv("KX_DATA_DIR", str(tmp_path))
+
+    at = AppTest.from_file(str(APP), default_timeout=60).run()
+
+    assert not at.exception
+    assert any("alinear" in str(error.value) for error in at.error)
+
+
 def test_fixture_frame_is_what_the_app_expects() -> None:
     price = load_series(FIXTURES / "price_tiny.csv")
     assert isinstance(price.index, pd.DatetimeIndex)

@@ -84,7 +84,7 @@ rejected alternatives live in [`docs/decisions.md`](docs/decisions.md).
 ## Tests
 
 ```bash
-uv run pytest        # 119 tests, no network required
+uv run pytest        # 134 tests, no network required
 uv run ruff check
 ```
 

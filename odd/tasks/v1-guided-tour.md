@@ -32,6 +32,7 @@
 | T9 | S7 | Parada 2 (swing) para probar que el motor generaliza sin reescribir la capa de costos | inline | 07b341f |
 | T10 | S1 | Idempotencia de `--send` (`client_order_id` determinístico), `position_qty` sin inferir "plano" desde una excepción, y `kx data fetch` cumpliendo el contrato `kx: <reason>` | inline | a515f73 |
 | T11 | S1 | Efectivo leído de la cuenta (`available_cash_clp`) en vez de deducirlo de `equity − posición × precio` | inline | 9e09916 |
+| T12 | S2, S3, S9 | Caché escrita de forma atómica (temp + `os.replace`) y `DataAlignmentError` explicado en la app en vez de traceback crudo | inline | pending |
 
 ## Log
 
@@ -81,3 +82,10 @@ Límite explícito del fix de idempotencia: **evita duplicar, no reconcilia**. S
 Siguen abiertos, sin motivo para re-correr review sobre este candidato: `R2-app-dpf-convention-split` (la métrica DPF mezcla dos convenciones de capitalización en un número), `R2-duplicate-years-helper` (`_years` triplicado mientras los docstrings prometen "stated once"), `R4-app-unhandled-alignment` (un `DataAlignmentError` llega crudo a la app), `R4-fetch-partial-cache` y `R4-store-nonatomic-write` (caché escrita sin temp+rename), `R1-country-filename` (el nombre del CPI no pasa por `slug`), `R2-unused-scenario-labels`, `R3-003` (test acoplado al conteo exacto de operaciones).
 
 **L10** (bugfix, 2026-11-19): la review de entrega (`review-c62b5c1d45cca734`) encontró un bug de dinero real en `plan()`: el efectivo se deducía como `equity − posición × precio`, lo que asume que la cuenta no tiene nada más que el símbolo objetivo. Con cualquier otro ticker en la cuenta el efectivo queda inflado y la orden sale más grande que la plata que la respalda. Arreglado en T11: el protocolo `Broker` gana `available_cash_clp(fx)` y `plan()` lo pregunta en vez de deducirlo (`AlpacaPaperBroker` lee `account.cash`; `DryRunBroker` recibe el campo). Un dato del camino: `equity` sigue leyéndose aparte para mostrarla, así que un plan hace dos lecturas de la cuenta — se prefiere el número honesto a una llamada menos.
+
+**L11** (resiliencia, 2026-11-19): de los hallazgos informativos quedaban dos que atacan la tesis del producto, y se cierran en T12.
+
+- `write_series` escribía el CSV directo al destino: un `Ctrl-C` o un disco lleno dejaba un archivo truncado que `load_series` después leía como una historia más corta pero válida. Es decir, **una simulación silenciosamente equivocada**, que es exactamente lo que este proyecto promete no hacer. Ahora escribe a un temporal en el mismo directorio y hace `os.replace`, limpiando también en `Ctrl-C`.
+- La app atrapaba solo `DataNotCached`: un caché desalineado (tipo de cambio o IPC que empiezan después que los precios) llegaba a pantalla como traceback crudo de Streamlit. Ahora explica qué pasó y qué comando lo arregla, con el detalle técnico en un caption. S3 pide quitar las rueditas, no mostrar un stack trace.
+
+Nota sobre el primer intento: el test de atomicidad que escribí primero fallaba antes de tocar el archivo, así que el código viejo también lo pasaba. Se reescribió para truncar y morir a mitad de escritura, que es lo que distingue las dos implementaciones.

@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 
 from kx.chile import break_even_tax_rate, deposit_table
-from kx.data import PRICE, DataNotCached
+from kx.data import PRICE, DataAlignmentError, DataNotCached
 from kx.honest import cost_ladder, drawdown_episodes, missing_best_days, panic_path
 from kx.ledger import Costs, Result, buy_and_hold, simulate
 from kx.loader import MarketData, load_market
@@ -443,6 +443,15 @@ def main() -> None:
             "No hay datos en caché. Corré `kx data fetch --symbol SPY --start 2010-01-01` "
             "en el proyecto y volvé a cargar esta página."
         )
+        st.stop()
+    except DataAlignmentError as exc:
+        st.error(
+            "El caché no se puede alinear: el tipo de cambio o el IPC no tienen valor para "
+            "las primeras fechas de precios, así que rellenar hacia atrás inventaría datos. "
+            "Volvé a bajarlos con `kx data fetch --symbol SPY --start 2005-01-01` para que "
+            "cubran el mismo período."
+        )
+        st.caption(f"Detalle: {exc}")
         st.stop()
 
     profile = suggest_profile(

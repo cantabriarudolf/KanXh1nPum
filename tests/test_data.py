@@ -86,6 +86,36 @@ def test_csv_cache_roundtrip_is_lossless(tmp_path: Path) -> None:
     assert isinstance(restored.index, pd.DatetimeIndex)
 
 
+def test_a_failed_write_leaves_the_previous_cache_intact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A truncated cache would later read as a shorter-but-valid history."""
+    path = tmp_path / "series.csv"
+    write_series(_series("price_tiny.csv"), path)
+    before = path.read_text()
+
+    def explode(
+        self: pd.DataFrame, path_or_buf: object = None, *args: object, **kwargs: object
+    ) -> None:
+        # A real writer truncates the target and *then* can die mid-write. Raising before
+        # touching anything would let the naive implementation pass this test.
+        if hasattr(path_or_buf, "write"):
+            path_or_buf.write("date,close\n")  # type: ignore[union-attr]
+            path_or_buf.flush()  # type: ignore[union-attr]
+        else:
+            Path(str(path_or_buf)).write_text("date,close\n")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pd.DataFrame, "to_csv", explode)
+
+    with pytest.raises(OSError, match="disk full"):
+        write_series(_series("price_tiny.csv"), path)
+
+    assert path.read_text() == before
+    # No half-written temporary file is left behind either.
+    assert sorted(item.name for item in tmp_path.iterdir()) == ["series.csv"]
+
+
 def test_cache_miss_names_the_command_that_fixes_it(tmp_path: Path) -> None:
     with pytest.raises(DataNotCached, match="kx data fetch"):
         load_series(tmp_path / "nope.csv")

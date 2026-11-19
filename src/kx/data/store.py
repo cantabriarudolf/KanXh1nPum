@@ -6,6 +6,8 @@ Floats are written with round-trip precision so a cache cycle never changes a nu
 
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -52,7 +54,13 @@ def load_series(path: str | Path, column: str = _VALUE_COLUMN) -> pd.Series:
 
 
 def write_series(series: pd.Series, path: str | Path) -> None:
-    """Write `series` to `path` with round-trip float precision."""
+    """Write `series` to `path` with round-trip float precision.
+
+    The CSV lands in a temporary file beside the target and is renamed into place, so an
+    interrupted fetch leaves the previous cache intact instead of a truncated file that
+    would later read as a shorter-but-valid history — a silent wrong answer, which is the
+    one failure this project cannot afford.
+    """
     path = Path(path)
     _require_index(series, path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,4 +71,15 @@ def write_series(series: pd.Series, path: str | Path) -> None:
             _VALUE_COLUMN: series.to_numpy(dtype="float64"),
         }
     )
-    frame.to_csv(path, index=False, float_format="%.17g")
+    descriptor, temporary = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(descriptor, "w", newline="") as handle:
+            frame.to_csv(handle, index=False, float_format="%.17g")
+        os.replace(temporary, path)
+    except BaseException:
+        # Also on Ctrl-C: a half-written file must never be left where a reader expects a
+        # whole one.
+        Path(temporary).unlink(missing_ok=True)
+        raise
