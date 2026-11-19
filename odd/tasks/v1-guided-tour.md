@@ -30,6 +30,7 @@
 | T7 | S2, S3, S7 | App Streamlit: parada 1 del recorrido (buy & hold) con progreso y navegación guiada | inline | e5dee81 |
 | T8 | S1 | Cableado Alpaca paper para la estrategia de buy & hold, runner en modo seguro por defecto | inline | 4e5dd21 |
 | T9 | S7 | Parada 2 (swing) para probar que el motor generaliza sin reescribir la capa de costos | inline | 07b341f |
+| T10 | S1 | Idempotencia de `--send` (`client_order_id` determinístico), `position_qty` sin inferir "plano" desde una excepción, y `kx data fetch` cumpliendo el contrato `kx: <reason>` | inline | a515f73 |
 
 ## Log
 
@@ -65,3 +66,15 @@ Se agrega además `kx.presets`: los presets de costos estaban duplicados en la a
 - Corregido después: `kx bot` dejaba escapar un `ValueError` de la regla como traceback, rompiendo el contrato `kx: <reason>` que promete `docs/bot.md`.
 - Refutado por el código: `intents` solo puede tener 0 o 1 elemento (`_rebalance` devuelve un trade como máximo), así que "la segunda orden después de la primera" no puede ocurrir; y un caché con huecos no puede llegar a la app porque `build_market_frame` rechaza precios con NaN.
 - Abierto: `--send` no tiene idempotencia. Si el host acepta la orden y la respuesta expira, no queda order id y un reintento ingenuo puede duplicar la orden. Requiere client order ids y reconciliación: es diseño, no un parche.
+
+**L8** (follow-ups, 2026-11-19): el review de la entrega (`review-d0f08b37f377665e`) dejó 14 hallazgos informativos. Tres se resolvieron en `a515f73`, y con eso se cierra el ítem abierto de L7:
+
+- `position_qty` ya no infiere "plano" desde una excepción: lee la lista de posiciones de la cuenta. El chequeo de 404 que había era **letra muerta** — `APIError.status_code` se deriva de `_http_error.response.status_code` y queda en `None` cuando falta, así que el fallback por substring hacía todo el trabajo. Verificado leyendo el fuente de alpaca-py, no supuesto.
+- `--send` es retry-safe: cada orden lleva un `client_order_id` derivado de la decisión (símbolo, lado, cantidad, fecha de la barra, peso objetivo, preset de costos). Alpaca rechaza un id ya visto, así que un reintento del mismo plan no puede duplicar. Un submit fallido dice que la orden **puede** haber llegado y nombra el id.
+- `kx data fetch` cumple el contrato `kx: <reason>`, y valida el nombre del archivo antes de ir a la red en vez de después.
+
+Límite explícito del fix de idempotencia: **evita duplicar, no reconcilia**. Si la respuesta se perdió, el usuario tiene que mirar la cuenta igual; el id hace que el reintento falle ruidoso en vez de duplicar.
+
+**L9** (forma de entrega, 2026-11-19): un solo PR (#1, `feat/v1-guided-tour` → `main`), 12 commits, ~4472 líneas. Los límites de rebanada quedan donde los puso el review: `e5dee81..8e0b4a8` (lineage `review-c913f3cf803130dd`) y `f182aa0..6228651` (lineage `review-d0f08b37f377665e`). `a515f73` cae fuera de ambos rangos y es trabajo de follow-up, no una reapertura: los hallazgos que lo motivaron eran informativos.
+
+Siguen abiertos, sin motivo para re-correr review sobre este candidato: `R2-app-dpf-convention-split` (la métrica DPF mezcla dos convenciones de capitalización en un número), `R2-duplicate-years-helper` (`_years` triplicado mientras los docstrings prometen "stated once"), `R4-app-unhandled-alignment` (un `DataAlignmentError` llega crudo a la app), `R4-fetch-partial-cache` y `R4-store-nonatomic-write` (caché escrita sin temp+rename), `R1-country-filename` (el nombre del CPI no pasa por `slug`), `R2-unused-scenario-labels`, `R3-003` (test acoplado al conteo exacto de operaciones).
