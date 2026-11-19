@@ -368,6 +368,84 @@ def render_swing(data: MarketData, initial: float, monthly: float, costs_name: s
     render_drawdown_expander(lump_swing)
 
 
+FREQUENCY_WINDOWS: tuple[tuple[int, int], ...] = ((5, 20), (10, 50), (20, 100), (50, 200))
+
+
+def render_frequency(data: MarketData, initial: float, monthly: float, costs_name: str) -> None:
+    costs = PRESETS_BY_LABEL[costs_name]
+    frame = data.frame
+    flows = monthly_cashflows(frame.index, monthly)
+
+    st.header("3 · Cada cuánto mover: el precio de la frecuencia")
+    st.markdown(
+        "La regla es la misma de la parada anterior; lo que cambia es cuántas ruedas mira "
+        "antes de decidir. Una ventana corta reacciona rápido y opera seguido. El motor de "
+        "costos no distingue una señal buena de una mala: cobra las dos."
+    )
+    st.caption(
+        "Intradía y scalping no aparecen en esta parada porque el caché es de ruedas "
+        "diarias: no hay dato que represente operar varias veces por día. Lo que sí se "
+        "puede medir es lo que cuesta moverse más seguido."
+    )
+
+    windows = [(fast, slow) for fast, slow in FREQUENCY_WINDOWS if slow <= len(frame)]
+    if not windows:
+        st.info(
+            f"La muestra tiene {len(frame)} ruedas y la ventana más corta de esta parada "
+            "necesita 20. Traé más historia con "
+            "`kx data fetch --symbol SPY --start 2005-01-01`."
+        )
+        return
+
+    # One simulation per window, and every number in the row comes from that same run:
+    # pairing friction from one hypothetical with contributions from another is how a
+    # table starts lying without anyone noticing.
+    measured = []
+    for fast, slow in windows:
+        target = sma_crossover(frame[PRICE], fast=fast, slow=slow)
+        result = simulate(
+            frame, target=target, costs=costs, initial_cash_clp=initial, cashflows=flows
+        )
+        measured.append(
+            {
+                "label": f"{fast} / {slow}",
+                "trades": len(result.trades),
+                "friction": result.costs_clp,
+                "equity": result.final_equity_clp,
+                "invested": result.invested_clp,
+            }
+        )
+
+    st.dataframe(
+        pd.DataFrame(
+            {
+                "Ventanas": [row["label"] for row in measured],
+                "Operaciones": [row["trades"] for row in measured],
+                "Fricción pagada": [clp(row["friction"]) for row in measured],
+                "Tu cuenta hoy": [clp(row["equity"]) for row in measured],
+                "Aportaste": [clp(row["invested"]) for row in measured],
+            }
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    st.bar_chart(
+        pd.DataFrame(
+            {"Fricción pagada": [row["friction"] for row in measured]},
+            index=[row["label"] for row in measured],
+        )
+    )
+
+    most = max(measured, key=lambda row: row["trades"])
+    least = min(measured, key=lambda row: row["trades"])
+    st.caption(
+        f"La ventana {most['label']} operó {most['trades']} veces y pagó "
+        f"{clp(most['friction'])}; la {least['label']} operó {least['trades']} y pagó "
+        f"{clp(least['friction'])}. Que moverse más cuesta más es seguro; que además "
+        "convenga no lo es, y por eso acá no hay una ventana recomendada."
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="KanXh1nPum", page_icon="🧭", layout="wide")
     st.title("KanXh1nPum")
@@ -378,7 +456,12 @@ def main() -> None:
 
     with st.sidebar:
         st.subheader("El recorrido")
-        stops = ["0 · La realidad chilena", "1 · Comprar y aguantar", "2 · Cruzar medias"]
+        stops = [
+            "0 · La realidad chilena",
+            "1 · Comprar y aguantar",
+            "2 · Cruzar medias",
+            "3 · Cada cuánto mover",
+        ]
         stop = st.radio(
             "Parada",
             stops,
@@ -387,10 +470,7 @@ def main() -> None:
         )
         position = stops.index(stop) + 1
         st.progress(position / len(stops))
-        st.caption(
-            f"Parada {position} de {len(stops)}. Próximamente: intradía y por qué el "
-            "scalping no es para vos."
-        )
+        st.caption(f"Parada {position} de {len(stops)}.")
 
         with st.expander("Tu cuenta demo, en tres comandos"):
             st.caption(
@@ -494,8 +574,10 @@ def main() -> None:
         render_reality_check(tax_rate)
     elif stop.startswith("1"):
         render_buy_and_hold(data, float(initial), float(monthly), costs_name)
-    else:
+    elif stop.startswith("2"):
         render_swing(data, float(initial), float(monthly), costs_name)
+    else:
+        render_frequency(data, float(initial), float(monthly), costs_name)
 
     st.divider()
     st.caption(
