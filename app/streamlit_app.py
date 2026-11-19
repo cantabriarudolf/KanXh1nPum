@@ -354,7 +354,7 @@ def render_swing(data: MarketData, initial: float, monthly: float, costs_name: s
         target=target,
         costs=costs,
         initial=initial,
-        costs_clp=lump_swing.costs_clp,
+        costs_clp=result.costs_clp,
         invested_clp=result.invested_clp,
         costs_name=costs_name,
         note=(

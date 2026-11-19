@@ -246,7 +246,9 @@ def _bot(args: argparse.Namespace) -> int:
 
     try:
         return _bot_run(args) if args.bot_command == "run" else _bot_plan(args)
-    except KxError as exc:
+    except (KxError, ValueError) as exc:
+        # ValueError comes from the rule and the bar validators: a corrupted cache is a
+        # message the person can act on, not a traceback. docs/bot.md promises that.
         print(f"kx: {exc}", file=sys.stderr)
         return 1
 

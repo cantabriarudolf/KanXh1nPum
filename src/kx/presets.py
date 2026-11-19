@@ -21,7 +21,8 @@ FREE = Costs()
 ALPACA = Costs(commission_bps=0.0, half_spread_bps=5.0, slippage_bps=5.0)
 CHILE = Costs(commission_bps=30.0, half_spread_bps=10.0, slippage_bps=10.0)
 
-#: What `kx bot --cost-preset` accepts. Keep in sync with the bot's own validation.
+#: What `kx bot --cost-preset` accepts. The bot validates membership against this exact
+#: mapping and holds no second list, so a new key here is usable from the CLI at once.
 PRESETS_BY_KEY: dict[str, Costs] = {"alpaca": ALPACA, "chile": CHILE}
 
 #: What the dashboard's selectbox lists, in the order it should be read.

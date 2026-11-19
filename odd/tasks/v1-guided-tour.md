@@ -57,3 +57,11 @@ Se agrega además `kx.presets`: los presets de costos estaban duplicados en la a
 - La tercera parada (intradía y por qué el scalping no es para vos) sigue siendo un aviso de "próximamente": el recorrido cubre dos temporalidades, no "las diferentes".
 - El comportamiento real del host paper de Alpaca no está verificado (requiere claves). Lo que sí se pinea es la invariante que importa: `paper=True` en la construcción del cliente.
 - El test de la parada 2 sigue acoplado a un conteo exacto de operaciones (`[1, 5]`) sobre un fixture sintético.
+
+**L7** (review nativa, 2026-11-19): el review aprobó el candidato `e5dee81..8e0b4a8` (lineage `review-c913f3cf803130dd`) después de una corrección acotada de 71 diff lines. Los hallazgos que el review dejó como no bloqueantes se resuelven así, en un commit **fuera** del rango aprobado:
+
+- Corregido en el rango aprobado: `position_qty` respondía `0.0` a cualquier `APIError`, así que un rate limit se leía como "no tengo posición" y `--send` compraba a tamaño completo encima de la posición real. Ahora solo el 404 ("position does not exist") es plano; el resto propaga.
+- Corregido después: la parada 2 dividía fricción de la corrida *lump-sum* por aportes de la corrida con flujos mensuales — un par que no corresponde a ninguna simulación. Ahora usa los números de una sola corrida, como la parada 1.
+- Corregido después: `kx bot` dejaba escapar un `ValueError` de la regla como traceback, rompiendo el contrato `kx: <reason>` que promete `docs/bot.md`.
+- Refutado por el código: `intents` solo puede tener 0 o 1 elemento (`_rebalance` devuelve un trade como máximo), así que "la segunda orden después de la primera" no puede ocurrir; y un caché con huecos no puede llegar a la app porque `build_market_frame` rechaza precios con NaN.
+- Abierto: `--send` no tiene idempotencia. Si el host acepta la orden y la respuesta expira, no queda order id y un reintento ingenuo puede duplicar la orden. Requiere client order ids y reconciliación: es diseño, no un parche.

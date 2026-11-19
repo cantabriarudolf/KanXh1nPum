@@ -409,6 +409,21 @@ def test_describe_names_the_rule_that_set_the_weight() -> None:
     assert "sma-cross 2/3" in describe(crossed)
 
 
+def test_cli_reports_a_rule_error_instead_of_dying_with_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """docs/bot.md promises `kx: <reason>` on stderr; a ValueError must not escape it."""
+    monkeypatch.setenv("KX_DATA_DIR", str(write_cache(tmp_path)))
+
+    code = main(["bot", "plan", "--strategy", "sma-cross", "--fast", "0", "--slow", "100"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.err.startswith("kx: ")
+    assert "at least 1" in captured.err
+    assert captured.out == ""
+
+
 def test_position_qty_reads_a_missing_position_as_flat(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
