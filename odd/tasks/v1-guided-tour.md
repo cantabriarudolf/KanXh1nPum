@@ -31,7 +31,7 @@
 | T8 | S1 | Cableado Alpaca paper para la estrategia de buy & hold, runner en modo seguro por defecto | inline | 4e5dd21 |
 | T9 | S7 | Parada 2 (swing) para probar que el motor generaliza sin reescribir la capa de costos | inline | 07b341f |
 | T10 | S1 | Idempotencia de `--send` (`client_order_id` determinístico), `position_qty` sin inferir "plano" desde una excepción, y `kx data fetch` cumpliendo el contrato `kx: <reason>` | inline | a515f73 |
-| T11 | S1 | Efectivo leído de la cuenta (`available_cash_clp`) en vez de deducirlo de `equity − posición × precio` | inline | pending |
+| T11 | S1 | Efectivo leído de la cuenta (`available_cash_clp`) en vez de deducirlo de `equity − posición × precio` | inline | 9e09916 |
 
 ## Log
 
