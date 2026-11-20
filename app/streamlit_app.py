@@ -7,6 +7,8 @@ perderte los mejores días; qué pasó cuando el mercado cayó y la gente vendi�
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -446,8 +448,43 @@ def render_frequency(data: MarketData, initial: float, monthly: float, costs_nam
     )
 
 
+def _house_style() -> str:
+    """The few rules the theme cannot express, taken from `assets/band.svg`.
+
+    Colours are the band's: `#0a0a0b` ground, `#c0a062` and `#8a6d3f` brass for structure,
+    `#f095c8` pink for cost only, `#c9ccd1` ink. The theme in `.streamlit/config.toml`
+    carries the palette; this carries the geometry.
+    """
+    return (
+        "<style>"
+        ".block-container{padding-top:1.1rem;max-width:1180px}"
+        ".kx-band{margin:0 0 1.2rem 0}"
+        ".kx-band svg{width:100%;height:auto;display:block}"
+        "[data-testid='stHeader']{background:transparent}"
+        "[data-testid='stDivider'] hr{border-color:#8a6d3f}"
+        "</style>"
+    )
+
+
+def _band() -> str:
+    """The repo's masthead plate, so the tour opens with the project's own mark.
+
+    Returns an empty string when the asset is missing: a missing mark must not take the
+    whole page down, and nothing here invents a replacement.
+    """
+    path = Path(__file__).resolve().parents[1] / "assets" / "band.svg"
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 def main() -> None:
     st.set_page_config(page_title="KanXh1nPum", page_icon="🧭", layout="wide")
+    st.markdown(_house_style(), unsafe_allow_html=True)
+    band = _band()
+    if band:
+        st.markdown(f'<div class="kx-band">{band}</div>', unsafe_allow_html=True)
     st.title("KanXh1nPum")
     st.caption(
         "Un laboratorio para entender qué pasa con tu plata antes de arriesgarla. "

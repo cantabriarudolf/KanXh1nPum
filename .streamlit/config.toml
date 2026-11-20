@@ -1,0 +1,12 @@
+# The tour's palette, taken from assets/band.svg so the app and the repo read as one piece.
+#
+# Brass (#c0a062) is structure: headings, progress, focus. It never marks a data series.
+# Pink (#f095c8) is semantic: it means money you paid to someone else, and nothing else.
+# That single rule is what makes the styling mean something instead of decorating.
+[theme]
+base = "dark"
+primaryColor = "#c0a062"
+backgroundColor = "#0a0a0b"
+secondaryBackgroundColor = "#141416"
+textColor = "#c9ccd1"
+font = "sans serif"
