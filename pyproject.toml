@@ -12,7 +12,7 @@ dependencies = [
 
 [project.optional-dependencies]
 data = ["yfinance>=0.2.40"]
-app = ["streamlit>=1.37", "plotly>=5.22"]
+app = ["streamlit>=1.37"]
 bot = ["alpaca-py>=0.33"]
 dev = ["pytest>=8", "ruff>=0.6"]
 
