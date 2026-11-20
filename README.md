@@ -75,16 +75,19 @@ how long each drawdown took to recover.
 
 ## Status
 
-The tour has three stops live: the Chilean reality check, buy & hold, and crossing
-averages. Both trading stops run through the same cost ledger, which is the point — change
-the rule, keep the arithmetic. Intraday and scalping are next. The v1 plan and its specs
-live in [`odd/tasks/v1-guided-tour.md`](odd/tasks/v1-guided-tour.md); reuse decisions and
-rejected alternatives live in [`docs/decisions.md`](docs/decisions.md).
+The tour has four stops live: the Chilean reality check, buy & hold, crossing averages,
+and what moving more often costs. Every trading stop runs through the same cost ledger,
+which is the point — change the rule, keep the arithmetic. Intraday is deliberately
+absent: the cache is daily bars, so there is no data that could represent trading several
+times a day, and the last stop measures the cost of frequency instead of pretending. The
+v1 plan and its specs live in [`odd/tasks/v1-guided-tour.md`](odd/tasks/v1-guided-tour.md);
+reuse decisions and rejected alternatives live in
+[`docs/decisions.md`](docs/decisions.md).
 
 ## Tests
 
 ```bash
-uv run pytest        # 134 tests, no network required
+uv run pytest        # 136 tests, no network required
 uv run ruff check
 ```
 

@@ -47,6 +47,10 @@ def comparison_table(at: AppTest) -> pd.DataFrame:
     return next(frame.value for frame in at.dataframe if "Regla" in frame.value.columns)
 
 
+def frequency_table(at: AppTest) -> pd.DataFrame:
+    return next(frame.value for frame in at.dataframe if "Ventanas" in frame.value.columns)
+
+
 def money(value: str) -> int:
     return int(value.replace("$", "").replace(".", ""))
 
@@ -168,11 +172,11 @@ def test_tour_shows_where_you_are_in_the_walk(
 
     assert not at.exception
     assert len(at.sidebar.progress) == 1
-    assert any("Parada 1 de 3" in str(caption.value) for caption in at.sidebar.caption)
+    assert any("Parada 1 de 4" in str(caption.value) for caption in at.sidebar.caption)
 
     at.sidebar.radio[0].set_value("2 · Cruzar medias").run()
 
-    assert any("Parada 3 de 3" in str(caption.value) for caption in at.sidebar.caption)
+    assert any("Parada 3 de 4" in str(caption.value) for caption in at.sidebar.caption)
 
 
 def test_tour_names_the_demo_account_and_how_to_reach_it(
@@ -190,6 +194,40 @@ def test_tour_names_the_demo_account_and_how_to_reach_it(
     assert "kx bot run --send" in commands
     # No key ever enters the dashboard: the account is wired from the shell.
     assert not at.text_input
+
+
+def test_frequency_stop_charges_more_when_the_rule_trades_more(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The stop's whole claim: moving more often costs more, measured, not promised."""
+    write_cache_with_history(tmp_path)
+    monkeypatch.setenv("KX_DATA_DIR", str(tmp_path))
+
+    at = AppTest.from_file(str(APP), default_timeout=60).run()
+    at.sidebar.radio[0].set_value("3 · Cada cuánto mover").run()
+
+    assert not at.exception
+    assert any("Cada cuánto mover" in str(header.value) for header in at.header)
+    table = frequency_table(at)
+    assert len(table) == 4
+
+    busiest = table.loc[table["Operaciones"].idxmax()]
+    calmest = table.loc[table["Operaciones"].idxmin()]
+    assert busiest["Operaciones"] > calmest["Operaciones"]
+    assert money(busiest["Fricción pagada"]) > money(calmest["Fricción pagada"])
+
+
+def test_frequency_stop_survives_a_sample_shorter_than_its_shortest_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_cache(tmp_path)
+    monkeypatch.setenv("KX_DATA_DIR", str(tmp_path))
+
+    at = AppTest.from_file(str(APP), default_timeout=60).run()
+    at.sidebar.radio[0].set_value("3 · Cada cuánto mover").run()
+
+    assert not at.exception
+    assert any("necesita 20" in str(info.value) for info in at.info)
 
 
 def test_app_explains_a_misaligned_cache_instead_of_crashing(

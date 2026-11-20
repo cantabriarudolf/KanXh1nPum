@@ -33,6 +33,7 @@
 | T10 | S1 | Idempotencia de `--send` (`client_order_id` determinístico), `position_qty` sin inferir "plano" desde una excepción, y `kx data fetch` cumpliendo el contrato `kx: <reason>` | inline | a515f73 |
 | T11 | S1 | Efectivo leído de la cuenta (`available_cash_clp`) en vez de deducirlo de `equity − posición × precio` | inline | 9e09916 |
 | T12 | S2, S3, S9 | Caché escrita de forma atómica (temp + `os.replace`) y `DataAlignmentError` explicado en la app en vez de traceback crudo | inline | 113132d |
+| T13 | S7 | Parada 3 del recorrido: el costo de la frecuencia, con la misma regla y ventanas distintas | inline | 4509dc7 |
 
 ## Log
 
@@ -89,3 +90,13 @@ Siguen abiertos, sin motivo para re-correr review sobre este candidato: `R2-app-
 - La app atrapaba solo `DataNotCached`: un caché desalineado (tipo de cambio o IPC que empiezan después que los precios) llegaba a pantalla como traceback crudo de Streamlit. Ahora explica qué pasó y qué comando lo arregla, con el detalle técnico en un caption. S3 pide quitar las rueditas, no mostrar un stack trace.
 
 Nota sobre el primer intento: el test de atomicidad que escribí primero fallaba antes de tocar el archivo, así que el código viejo también lo pasaba. Se reescribió para truncar y morir a mitad de escritura, que es lo que distingue las dos implementaciones.
+
+**L12** (S7, 2026-11-19): tercera parada del recorrido, en rama apilada `feat/tour-third-stop` porque el PR #1 ya está en el límite del presupuesto de review nativa.
+
+Decisión de diseño: **no hay parada de intradía ni de scalping**, y no es una omisión. El caché es de ruedas diarias (`kx data fetch` trae velas diarias), así que no existe dato que represente operar varias veces por día: una parada de intradía sería una simulación inventada, justo lo que S9 prohíbe. En su lugar la parada 3 mide lo que **sí** se puede medir con este dato — el costo de moverse más seguido — y lo dice explícitamente en pantalla.
+
+Mecánica: la misma `sma_crossover` de la parada 2 con cuatro pares de ventanas (5/20, 10/50, 20/100, 50/200). Ventanas cortas operan más; el motor de costos cobra igual las señales buenas y las malas. La tabla muestra operaciones, fricción, cuenta final y aportes, todo de **una sola** simulación por fila — el bug que el review encontró en la parada 2 fue exactamente mezclar fricción de una corrida con aportes de otra.
+
+Honestidad del mensaje: la pantalla afirma que moverse más cuesta más (verdad por construcción) y aclara que **convenga** no está garantizado, así que no se recomienda ninguna ventana.
+
+Con esto el recorrido cubre tres temporalidades: años (aguantar), semanas-meses (cruzar medias) y días-semanas (frecuencia), y la brecha de S7 sobre "las diferentes temporalidades" queda cerrada salvo el intradía, que el dato no soporta.
