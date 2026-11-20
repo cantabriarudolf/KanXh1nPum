@@ -57,8 +57,10 @@ def deposit_future_value(flows: pd.Series, annual_rate: float) -> float:
 def render_reality_check(tax_rate: float) -> None:
     st.header("0 · La realidad chilena primero")
     st.markdown(
-        "Antes de mirar cualquier estrategia, conviene saber qué hace tu plata si no hacés "
-        "nada. Este es el número que todo lo demás tiene que superar."
+        "Antes de cualquier estrategia, el dato incómodo: tu plata quieta en el banco **cada "
+        "día puede comprar menos cosas**. No es mala suerte ni un ciclo raro — es el IPC "
+        "trabajando de fondo. Lo que sigue es el número que todo lo demás tiene que superar, "
+        "medido con las tasas del Banco Central, no con opiniones."
     )
 
     rows = deposit_table(CHILE_2026_11, tax_rate=tax_rate)
@@ -89,9 +91,10 @@ def render_reality_check(tax_rate: float) -> None:
     derecha.metric("Impuesto que lo deja en cero", pct(break_even, 2))
 
     st.info(
-        f"Con una tasa marginal sobre {pct(break_even, 1)} el depósito crece en pesos y "
-        "pierde poder de compra al mismo tiempo. Eso no es una opinión: sale de las tasas "
-        "del Banco Central y del IPC. Los intereses, además, tributan."
+        f"Con una tasa marginal sobre {pct(break_even, 1)} el depósito **crece en pesos y "
+        "pierde poder de compra al mismo tiempo**. La forma más rata de guardar plata — "
+        "dejarla a plazo — alcanza justo para que no se te apolille en el colchón. No para "
+        "hacerte más rico. Y los intereses, encima, tributan."
     )
 
 
@@ -131,8 +134,9 @@ def render_cost_expander(
             width="stretch",
         )
         st.caption(
-            f"Total pagado en fricción: {clp(costs_clp)} sobre {clp(invested_clp)} "
-            f"aportados. Con '{costs_name}'."
+            f"Fricción pagada: {clp(costs_clp)} sobre {clp(invested_clp)} que pusiste, con "
+            f"'{costs_name}'. Eso no es volatilidad ni un mal día: es plata que se fue a otro "
+            "bolsillo."
         )
         if note is not None:
             st.caption(note)
@@ -156,8 +160,8 @@ def render_best_days_expander(lump: Result) -> None:
             width="stretch",
         )
         st.caption(
-            "El período es el mismo: seguiste invirtiendo todo el tiempo, solo que esos días "
-            "no estabas. Los mejores días se concentran cerca de los peores."
+            "Mismo período, misma plata: seguiste aportando, solo que esos días no estabas. "
+            "Los mejores días se pegan a los peores, y no avisan."
         )
 
 
@@ -182,7 +186,7 @@ def render_panic_expander(lump: Result) -> None:
             diferencia = frozen.iloc[-1] / lump.equity_clp.iloc[-1] - 1.0
             st.caption(
                 f"Habrías vendido el {sell_date.date()}. Al final te quedaría "
-                f"{pct(diferencia)} de lo que tendrías aguantando."
+                f"{pct(diferencia)} de lo que tendrías por no hacer nada."
             )
 
 
@@ -227,9 +231,9 @@ def render_buy_and_hold(data: MarketData, initial: float, monthly: float, costs_
 
     st.header("1 · Comprar y aguantar: el piso honesto")
     st.markdown(
-        "Comprar el índice completo y no tocarlo. No hay señal, no hay destreza, no hay "
-        "acierto: cobrás la prima de riesgo por aguantar. Si una estrategia activa no le "
-        "gana a esto, no vale el tiempo."
+        "Comprar el índice entero y no tocarlo. Sin señal, sin destreza, sin acierto: cobrás "
+        "la prima de riesgo por aguantar, que es lo único que nadie te puede vender. Si una "
+        "regla activa no le gana a esto, no vale el tiempo ni la comisión."
     )
 
     izquierda, centro, derecha = st.columns(3)
@@ -252,8 +256,9 @@ def render_buy_and_hold(data: MarketData, initial: float, monthly: float, costs_
         lines["Tu cuenta (pesos de hoy)"] = result.equity_real_clp / result.equity_real_clp.iloc[0]
     st.line_chart(lines)
     st.caption(
-        "Cada línea arranca en 1: es un índice, no pesos. La línea de pesos de hoy descuenta "
-        "la inflación; la del depósito usa la tasa a 90 días-1 año y no descuenta impuesto."
+        "Cada línea arranca en 1: es un índice, no plata. La de pesos de hoy ya descuenta la "
+        "inflación; la del depósito usa la tasa a 90 días-1 año y **no** descuenta impuesto "
+        "— o sea que el depósito está dibujado mejor de lo que es."
     )
 
     if result.equity_real_clp is not None:
@@ -284,11 +289,12 @@ def render_swing(data: MarketData, initial: float, monthly: float, costs_name: s
 
     st.header("2 · Cruzar medias: el mismo motor, otra regla")
     st.markdown(
-        "Acá cambia la regla, no el motor: estás adentro cuando el promedio de las últimas "
-        "ruedas cortas supera al de las largas, y te salís cuando el cruce se da al revés. "
-        "Misma plata, mismo período y los mismos costos que en la parada anterior."
+        "Cambia la regla, no el motor. Estás adentro cuando el promedio corto le gana al "
+        "largo, y afuera cuando se da vuelta. Es la parte que suena a que uno sabe algo — y "
+        "por eso la plata y los costos son los mismos que en la parada anterior: para que "
+        "compares contra eso y no contra tu entusiasmo."
     )
-    st.caption("Cruzar medias es una regla con un costo, no un descubrimiento.")
+    st.caption("Cruzar medias no es un descubrimiento: es una regla, y las reglas se pagan.")
 
     izquierda, derecha = st.columns(2)
     rapida = izquierda.slider("Media corta (ruedas)", min_value=2, max_value=60, value=20)
@@ -348,7 +354,7 @@ def render_swing(data: MarketData, initial: float, monthly: float, costs_name: s
     if lenta > len(frame):
         st.info(
             "La muestra es más corta que la media larga: la regla se queda en efectivo todo "
-            "el período."
+            "el período. No es prudencia; es que no hay con qué decidir."
         )
 
     render_cost_expander(
@@ -360,9 +366,9 @@ def render_swing(data: MarketData, initial: float, monthly: float, costs_name: s
         invested_clp=result.invested_clp,
         costs_name=costs_name,
         note=(
-            f"El cruce pagó {clp(lump_swing.costs_clp)} en fricción y comprar y aguantar "
+            f"El cruce pagó {clp(lump_swing.costs_clp)} de fricción y aguantar "
             f"{clp(lump_hold.costs_clp)}, con la misma plata. Cada entrada y cada salida se "
-            "cobran."
+            "cobran: la regla se paga sola, gane o pierda."
         ),
     )
     render_best_days_expander(lump_swing)
@@ -380,14 +386,15 @@ def render_frequency(data: MarketData, initial: float, monthly: float, costs_nam
 
     st.header("3 · Cada cuánto mover: el precio de la frecuencia")
     st.markdown(
-        "La regla es la misma de la parada anterior; lo que cambia es cuántas ruedas mira "
-        "antes de decidir. Una ventana corta reacciona rápido y opera seguido. El motor de "
-        "costos no distingue una señal buena de una mala: cobra las dos."
+        "Acá se cae el mito: **la gracia no es comprar y vender**. Mirar más seguido te da "
+        "más señales y más comisiones, y el motor de costos no distingue una señal buena de "
+        "una mala — cobra las dos. Misma regla que la parada anterior, ventanas distintas: "
+        "la única diferencia es cuánto pagaste por moverte."
     )
     st.caption(
-        "Intradía y scalping no aparecen en esta parada porque el caché es de ruedas "
-        "diarias: no hay dato que represente operar varias veces por día. Lo que sí se "
-        "puede medir es lo que cuesta moverse más seguido."
+        "Intradía y scalping no están porque el caché es de ruedas diarias: no hay dato que "
+        "represente operar varias veces por día, y preferimos no inventarlo. Lo que sí se "
+        "puede medir es la cuenta de movernos más seguido."
     )
 
     windows = [(fast, slow) for fast, slow in FREQUENCY_WINDOWS if slow <= len(frame)]
@@ -443,8 +450,8 @@ def render_frequency(data: MarketData, initial: float, monthly: float, costs_nam
     st.caption(
         f"La ventana {most['label']} operó {most['trades']} veces y pagó "
         f"{clp(most['friction'])}; la {least['label']} operó {least['trades']} y pagó "
-        f"{clp(least['friction'])}. Que moverse más cuesta más es seguro; que además "
-        "convenga no lo es, y por eso acá no hay una ventana recomendada."
+        f"{clp(least['friction'])}. Que moverse más cuesta más es seguro. Que además "
+        "convenga no lo es, y por eso acá nadie te vende la ventana ganadora."
     )
 
 
@@ -487,8 +494,9 @@ def main() -> None:
         st.markdown(f'<div class="kx-band">{band}</div>', unsafe_allow_html=True)
     st.title("KanXh1nPum")
     st.caption(
-        "Un laboratorio para entender qué pasa con tu plata antes de arriesgarla. "
-        "Nivel cero, con costos reales y sin humo."
+        "Esto no es un curso ni una forma académica de mirarlo. Es un simulador para ver, "
+        "con números y no con fe, qué le pasa a tu plata cuando la movés. Podés creerle o "
+        "no — pero acá no hay humo."
     )
 
     with st.sidebar:
@@ -527,7 +535,10 @@ def main() -> None:
 
         st.divider()
         st.subheader("Tu perfil")
-        st.caption("La edad sola no sirve: lo que manda es cuándo necesitás la plata.")
+        st.caption(
+            "La edad sola no dice nada. Lo que manda es cuándo necesitás la plata y cuánto "
+            "aguantás mirando el saldo sin vender."
+        )
         horizon = st.slider("¿En cuántos años la necesitás?", 1, 30, 10)
         tolerance = st.select_slider(
             "¿Cuánta caída aguantarías sin vender?",
@@ -557,14 +568,14 @@ def main() -> None:
         data = load_market()
     except DataNotCached:
         st.error(
-            "No hay datos en caché. Corré `kx data fetch --symbol SPY --start 2010-01-01` "
-            "en el proyecto y volvé a cargar esta página."
+            "No hay datos en el caché. Corré `kx data fetch --symbol SPY --start 2010-01-01` "
+            "en el proyecto y recargá: sin datos esto no simula nada."
         )
         st.stop()
     except DataAlignmentError as exc:
         st.error(
             "El caché no se puede alinear: el tipo de cambio o el IPC no tienen valor para "
-            "las primeras fechas de precios, así que rellenar hacia atrás inventaría datos. "
+            "las primeras fechas de precios, y rellenar hacia atrás sería inventar datos. "
             "Volvé a bajarlos con `kx data fetch --symbol SPY --start 2005-01-01` para que "
             "cubran el mismo período."
         )
@@ -596,13 +607,14 @@ def main() -> None:
     if data.cpi_is_stale:
         st.warning(
             "El índice de inflación está desactualizado respecto de los precios: la serie "
-            "'en pesos de hoy' subestima cuánto se comió la inflación al final."
+            "'en pesos de hoy' se queda corta y te muestra la inflación más benigna de lo "
+            "que fue."
         )
 
     if len(data.frame) < 250:
         st.warning(
-            f"La muestra tiene solo {len(data.frame)} ruedas: alcanza para probar que todo "
-            "funciona, no para concluir nada. Traé más historia con "
+            f"La muestra tiene solo {len(data.frame)} ruedas: alcanza para ver que la máquina "
+            "anda, no para concluir nada. Traé más historia con "
             "`kx data fetch --symbol SPY --start 2005-01-01`."
         )
 
@@ -618,9 +630,9 @@ def main() -> None:
 
     st.divider()
     st.caption(
-        "Nada de esto es asesoría financiera ni una recomendación de compra o venta. Son "
-        "simulaciones con costos y datos históricos; el pasado no anticipa el futuro. Si no "
-        "podés perder esta plata, no la arriesgues."
+        "Nada de esto es asesoría financiera ni una recomendación de compra o venta: es un "
+        "simulador con costos y datos históricos, y el pasado no anticipa nada. Si no podés "
+        "perder esta plata, no la arriesgues — ni acá ni en ninguna parte."
     )
 
 

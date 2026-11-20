@@ -49,6 +49,33 @@ someone else.
 - **A wordmark inside the band.** The asset is a plate carrying "powered by", not a title, so
   the `h1` stays and the plate sits above it.
 
+## Voice
+
+The copy is part of the identity, not a coat of paint on top of it. The register is the one
+the project owner speaks in: Chilean, blunt, anti-academic, and self-aware enough to say
+"podés creerle o no" out loud.
+
+What the voice does:
+
+- Opens by refusing to be a course: *"Esto no es un curso ni una forma académica de
+  mirarlo."*
+- Names the eroding number before any strategy: *"tu plata quieta en el banco cada día
+  puede comprar menos cosas"*.
+- Calls a term deposit what it is without insulting it: *"la forma más rata de guardar
+  plata"*, which reaches the colchón and no further.
+- Under-cuts itself where the evidence does, and never where it does not.
+
+What the voice is not allowed to do — these are hard limits, not preferences:
+
+- **No number changes.** Every figure, rate and label stays exactly as computed.
+- **No promise.** It may sound confident; it may not predict a return.
+- **No personalized advice.** The CMF framing survives the register: the profile still
+  returns an illustrative category under stress, never "you should".
+- **No self-contradiction.** The brief said *"la gracia es comprar y vender"*; the project's
+  own stop 3 measures that moving more often costs more. The copy states the tension instead
+  of picking a side quietly: *"Acá se cae el mito: la gracia no es comprar y vender."* A
+  voice that lies to stay in character is worse than an academic one.
+
 ## Files
 
 - Changed: `app/streamlit_app.py` (style block + masthead), `tests/test_app.py` (one test).

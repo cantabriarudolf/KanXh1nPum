@@ -111,7 +111,7 @@ def test_swing_stop_renders_beside_buy_and_hold(
 
     assert not at.exception
     assert any("Cruzar medias" in str(header.value) for header in at.header)
-    assert "Cruzar medias es una regla con un costo, no un descubrimiento." in [
+    assert "Cruzar medias no es un descubrimiento: es una regla, y las reglas se pagan." in [
         str(caption.value) for caption in at.caption
     ]
 
