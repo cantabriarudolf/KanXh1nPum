@@ -161,6 +161,22 @@ def test_no_emergency_fund_changes_the_profile(
     assert any("recomendación" in str(warning.value) for warning in at.warning)
 
 
+def test_app_opens_with_the_project_masthead(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The tour carries the repo's own plate instead of opening on a bare title."""
+    write_cache(tmp_path)
+    monkeypatch.setenv("KX_DATA_DIR", str(tmp_path))
+
+    at = AppTest.from_file(str(APP), default_timeout=60).run()
+
+    assert not at.exception
+    rendered = " ".join(str(block.value) for block in at.markdown)
+    assert "kx-band" in rendered
+    assert "<svg" in rendered
+    assert "powered by" in rendered
+
+
 def test_tour_shows_where_you_are_in_the_walk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
